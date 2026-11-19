@@ -1,0 +1,6 @@
+SIGNUP = "/signup"
+SIGNIN = "/signin"
+CREATE_LISTING = "/create-listing"
+UPDATE_LISTING = "/update-offer/{listing_id}"
+DELETE_LISTING = "/listings/{listing_id}"
+OWN_LISTINGS = "/profile/listings/{page}"
