@@ -1,19 +1,11 @@
-from dataclasses import dataclass
-
 import pytest
 import requests
 
 from api.listing_api import ListingApi
 from api.user_api import UserApi
-from data import DELETE_SUCCESS, LISTING_DATA, USER_PASSWORD
-from helpers.email_generator import generate_email
-
-
-@dataclass(frozen=True)
-class RegisteredUser:
-    credentials: dict
-    user_id: int
-    token: str
+from data import LISTING_DATA
+from helpers.user_helpers import generate_registration_data
+from models import RegisteredUser
 
 
 @pytest.fixture
@@ -23,79 +15,52 @@ def session():
 
 
 @pytest.fixture
-def user_api(session):
-    return UserApi(session)
+def registered_user(session):
+    credentials = generate_registration_data()
+    response = UserApi(session).register(credentials)
+    response.raise_for_status()
+    body = response.json()
+    return RegisteredUser(
+        credentials=credentials,
+        user_id=body["user"]["id"],
+        token=body["access_token"]["access_token"],
+    )
 
 
 @pytest.fixture
-def listing_api(session):
-    return ListingApi(session)
-
-
-@pytest.fixture
-def registration_data():
-    return {
-        "email": generate_email(),
-        "password": USER_PASSWORD,
-        "submitPassword": USER_PASSWORD,
-    }
-
-
-@pytest.fixture
-def user_factory(user_api):
-    def create_user():
-        credentials = {
-            "email": generate_email(),
-            "password": USER_PASSWORD,
-            "submitPassword": USER_PASSWORD,
-        }
-        response = user_api.register(credentials)
-        assert response.status_code == 201, response.text
-        body = response.json()
-        return RegisteredUser(
-            credentials=credentials,
-            user_id=body["user"]["id"],
-            token=body["access_token"]["access_token"],
-        )
-
-    return create_user
-
-
-@pytest.fixture
-def registered_user(user_factory):
-    return user_factory()
-
-
-@pytest.fixture
-def other_user(user_factory):
-    return user_factory()
-
-
-@pytest.fixture
-def listing_data():
-    return LISTING_DATA.copy()
-
-
-@pytest.fixture
-def listing_cleanup(listing_api):
+def listing_cleanup(session):
     """Удаляет только объявления этого теста, в том числе после падения проверки."""
     listings = []
     yield listings
+    listing_api = ListingApi(session)
     errors = []
     for listing_id, token in listings:
         try:
             response = listing_api.delete(token, listing_id)
-            assert response.status_code == 200, response.text
-            assert response.json() == DELETE_SUCCESS
-        except (requests.RequestException, AssertionError, ValueError) as error:
+            response.raise_for_status()
+        except requests.RequestException as error:
             errors.append(f"Объявление {listing_id}: {error}")
-    assert not errors, "\n".join(errors)
+    if errors:
+        raise RuntimeError("\n".join(errors))
 
 
 @pytest.fixture
-def created_listing(listing_api, registered_user, listing_data, listing_cleanup):
-    response = listing_api.create(registered_user.token, listing_data)
-    assert response.status_code == 201, response.text
+def created_listing(session, registered_user, listing_cleanup):
+    response = ListingApi(session).create(registered_user.token, LISTING_DATA.copy())
+    response.raise_for_status()
     listing = response.json()
     listing_cleanup.append((listing["id"], registered_user.token))
+    return listing
+
+
+@pytest.fixture
+def foreign_listing(session, listing_cleanup):
+    credentials = generate_registration_data()
+    registration_response = UserApi(session).register(credentials)
+    registration_response.raise_for_status()
+    owner_token = registration_response.json()["access_token"]["access_token"]
+    response = ListingApi(session).create(owner_token, LISTING_DATA.copy())
+    response.raise_for_status()
+    listing = response.json()
+    listing_cleanup.append((listing["id"], owner_token))
     return listing

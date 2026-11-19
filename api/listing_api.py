@@ -1,4 +1,5 @@
 from api.base_api import BaseApi
+from urls import CREATE_LISTING, DELETE_LISTING, OWN_LISTINGS, UPDATE_LISTING
 
 
 class ListingApi(BaseApi):
@@ -10,7 +11,7 @@ class ListingApi(BaseApi):
     def create(self, token, data):
         return self.request(
             "POST",
-            "/create-listing",
+            CREATE_LISTING,
             headers=self.auth_headers(token),
             files=self.multipart_fields(data),
         )
@@ -19,7 +20,7 @@ class ListingApi(BaseApi):
         form_data = {**data, "img1": "null", "img2": "null", "img3": "null"}
         return self.request(
             "PATCH",
-            f"/update-offer/{listing_id}",
+            UPDATE_LISTING.format(listing_id=listing_id),
             headers=self.auth_headers(token),
             files=self.multipart_fields(form_data),
         )
@@ -27,13 +28,13 @@ class ListingApi(BaseApi):
     def delete(self, token, listing_id):
         return self.request(
             "DELETE",
-            f"/listings/{listing_id}",
+            DELETE_LISTING.format(listing_id=listing_id),
             headers=self.auth_headers(token),
         )
 
     def get_own_listings(self, token, page=1):
         return self.request(
             "GET",
-            f"/profile/listings/{page}",
+            OWN_LISTINGS.format(page=page),
             headers=self.auth_headers(token),
         )
